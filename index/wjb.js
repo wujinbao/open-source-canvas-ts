@@ -180,8 +180,13 @@ var circle = new Circle({
     eAngle: 1.5,
     fill: "green"
 });
-var triangle = new Triangle();
-canvas.add(rect, rect1, circle);
+var triangle = new Triangle({
+    left: 50,
+    top: 80,
+    width: 100,
+    stroke: 'yellow'
+});
+canvas.add(rect, rect1, circle, triangle);
 rect1.set('left', 200);
 circle.set({
     left: 250,

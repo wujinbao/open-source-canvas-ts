@@ -204,9 +204,14 @@ let circle = new Circle({
 	fill: "green"
 })
 
-let triangle = new Triangle()
+let triangle = new Triangle({
+	left: 50,
+	top: 80,
+	width: 100,
+	stroke: 'yellow'
+})
 
-canvas.add(rect, rect1, circle)
+canvas.add(rect, rect1, circle, triangle)
 
 rect1.set('left', 200)
 circle.set({
