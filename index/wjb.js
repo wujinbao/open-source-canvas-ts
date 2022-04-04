@@ -20,7 +20,7 @@ var Canvas = /** @class */ (function () {
             width: 800,
             height: 600
         };
-        this.drawTarget = [];
+        this.drawTargetArray = [];
         var body = document.body;
         var canvas = document.createElement('canvas');
         body.appendChild(canvas);
@@ -45,7 +45,7 @@ var Canvas = /** @class */ (function () {
         }
         drawTarget.map(function (item) {
             item.draw(_this.ctx, item);
-            _this.drawTarget.push(item);
+            _this.drawTargetArray.push(item);
         });
     };
     Canvas.prototype.remove = function () {
@@ -54,15 +54,15 @@ var Canvas = /** @class */ (function () {
         for (var _i = 0; _i < arguments.length; _i++) {
             drawTarget[_i] = arguments[_i];
         }
-        var newDrawTarget = [];
+        var newDrawTargetArray = [];
         this.ctx.clearRect(0, 0, this.canvasParam.width, this.canvasParam.height);
-        this.drawTarget.map(function (item, index) {
+        this.drawTargetArray.map(function (item, index) {
             if (drawTarget.indexOf(item) == -1) {
                 item.draw(_this.ctx, item);
-                newDrawTarget.push(item);
+                newDrawTargetArray.push(item);
             }
         });
-        this.drawTarget = newDrawTarget;
+        this.drawTargetArray = newDrawTargetArray;
     };
     return Canvas;
 }());
@@ -73,15 +73,30 @@ var DarwCommon = /** @class */ (function () {
         this.drawParam = {
             left: 0,
             top: 0,
+            dotArray: [[10, 10]],
             width: 50,
             height: 50,
             radius: 50,
+            rX: 20,
+            rY: 10,
             sAngle: 0,
             eAngle: 2,
             counterclockwise: false,
             fill: '',
             stroke: '',
-            lineWidth: 1
+            shadowColor: '#000',
+            shadowBlur: 0,
+            shadowOffsetX: 0,
+            shadowOffsetY: 0,
+            lineCap: 'butt',
+            lineJoin: 'miter',
+            lineWidth: 1,
+            miterLimit: 10,
+            angle: 0,
+            scaleWidth: 1,
+            scaleHeight: 1,
+            globalAlpha: 1,
+            globalCompositeOperation: 'source-over'
         };
         if (drawParam) {
             for (var key in drawParam) {
@@ -107,14 +122,32 @@ var DarwCommon = /** @class */ (function () {
     DarwCommon.prototype.draw = function (ctx, drawTarget) {
         ctx.save();
         ctx.beginPath();
+        ctx.shadowColor = this.drawParam.shadowColor;
+        ctx.shadowBlur = this.drawParam.shadowBlur;
+        ctx.shadowOffsetX = this.drawParam.shadowOffsetX;
+        ctx.shadowOffsetY = this.drawParam.shadowOffsetY;
+        ctx.lineCap = this.drawParam.lineCap;
+        ctx.lineJoin = this.drawParam.lineJoin;
+        ctx.lineWidth = this.drawParam.lineWidth;
+        ctx.miterLimit = this.drawParam.miterLimit;
+        ctx.globalAlpha = this.drawParam.globalAlpha;
+        ctx.globalCompositeOperation = this.drawParam.globalCompositeOperation;
+        ctx.translate(this.drawParam.left, this.drawParam.top);
+        ctx.rotate(this.drawParam.angle * Math.PI / 180);
+        ctx.scale(this.drawParam.scaleWidth, this.drawParam.scaleHeight);
         drawTarget.privateDraw(ctx);
-        if (this.drawParam.fill) {
+        if (this.drawParam.fill && this.drawParam.stroke) {
+            ctx.fillStyle = this.drawParam.fill;
+            ctx.fill();
+            ctx.strokeStyle = this.drawParam.stroke;
+            ctx.stroke();
+        }
+        else if (this.drawParam.fill) {
             ctx.fillStyle = this.drawParam.fill;
             ctx.fill();
         }
         else {
             ctx.strokeStyle = this.drawParam.stroke;
-            ctx.lineWidth = this.drawParam.lineWidth;
             ctx.stroke();
         }
         ctx.restore();
@@ -129,7 +162,7 @@ var Rect = /** @class */ (function (_super) {
     }
     Rect.prototype.privateDraw = function (ctx) {
         var drawParam = this.drawParam;
-        ctx.rect(drawParam.left, drawParam.top, drawParam.width, drawParam.height);
+        ctx.rect(0, 0, drawParam.width, drawParam.height);
     };
     return Rect;
 }(DarwCommon));
@@ -141,7 +174,7 @@ var Circle = /** @class */ (function (_super) {
     }
     Circle.prototype.privateDraw = function (ctx) {
         var drawParam = this.drawParam;
-        ctx.arc(drawParam.left, drawParam.top, drawParam.radius, drawParam.sAngle * Math.PI, drawParam.eAngle * Math.PI, drawParam.counterclockwise);
+        ctx.arc(0, 0, drawParam.radius, drawParam.sAngle * Math.PI, drawParam.eAngle * Math.PI, drawParam.counterclockwise);
     };
     return Circle;
 }(DarwCommon));
@@ -152,44 +185,108 @@ var Triangle = /** @class */ (function (_super) {
     }
     Triangle.prototype.privateDraw = function (ctx) {
         var drawParam = this.drawParam;
-        ctx.moveTo(drawParam.left, drawParam.top);
-        ctx.lineTo(drawParam.left + drawParam.width / 2, drawParam.top + drawParam.height);
-        ctx.lineTo(drawParam.left - drawParam.width / 2, drawParam.top + drawParam.height);
+        ctx.moveTo(0, 0);
+        ctx.lineTo(drawParam.width / 2, drawParam.height);
+        ctx.lineTo(-drawParam.width / 2, drawParam.height);
         ctx.closePath();
     };
     return Triangle;
 }(DarwCommon));
+var Line = /** @class */ (function (_super) {
+    __extends(Line, _super);
+    function Line(drawParam) {
+        return _super.call(this, drawParam) || this;
+    }
+    Line.prototype.privateDraw = function (ctx) {
+        var dotArray = this.drawParam.dotArray;
+        ctx.moveTo(0, 0);
+        dotArray.map(function (item) {
+            ctx.lineTo(item[0], item[1]);
+        });
+    };
+    return Line;
+}(DarwCommon));
+var Ellipse = /** @class */ (function (_super) {
+    __extends(Ellipse, _super);
+    function Ellipse(drawParam) {
+        return _super.call(this, drawParam) || this;
+    }
+    Ellipse.prototype.privateDraw = function (ctx) {
+        var drawParam = this.drawParam;
+        var rX = drawParam.rX;
+        var rY = drawParam.rY;
+        if (!ctx.ellipse) {
+            ctx.ellipse(0, 0, rX, rY, 0, 0, Math.PI * 2);
+        }
+        else {
+            ctx.translate(-drawParam.left, -drawParam.top);
+            var r = (rX > rY) ? rX : rY;
+            drawParam.scaleWidth = rX / r;
+            drawParam.scaleHeight = rY / r;
+            ctx.scale(drawParam.scaleWidth, drawParam.scaleHeight);
+            ctx.arc(drawParam.left / drawParam.scaleWidth, drawParam.top / drawParam.scaleHeight, r, 0, 2 * Math.PI, false);
+        }
+    };
+    return Ellipse;
+}(DarwCommon));
 // 代码运行测试
 var canvas = new Canvas();
 var rect = new Rect({
-    left: 10,
-    top: 10,
-    fill: 'red'
+    left: 30,
+    top: 30,
+    fill: 'red',
+    shadowBlur: 20,
+    shadowOffsetX: -20
 });
 var rect1 = new Rect({
+    left: 50,
+    top: 50,
+    fill: 'yellow',
+    globalCompositeOperation: "destination-over"
+});
+var rect2 = new Rect({
     left: 100,
     top: 100,
     width: 100,
     height: 100,
     stroke: 'yellow',
-    lineWidth: 5
+    scaleWidth: 2,
+    scaleHeight: 2
 });
 var circle = new Circle({
     left: 200,
     top: 50,
     eAngle: 1.5,
-    fill: "green"
+    fill: "green",
+    angle: 45,
+    globalAlpha: 0.5
 });
 var triangle = new Triangle({
     left: 50,
-    top: 80,
-    width: 100,
-    stroke: 'yellow'
+    top: 120,
+    width: 80,
+    stroke: 'blue',
+    lineJoin: 'round',
+    lineWidth: 5,
 });
-canvas.add(rect, rect1, circle, triangle);
-rect1.set('left', 200);
+canvas.add(rect, rect1, rect2, circle, triangle);
+rect2.set('left', 200);
 circle.set({
     left: 250,
     radius: 20
 });
-canvas.remove(rect1);
+canvas.remove(rect2);
+var line = new Line({
+    left: 150,
+    top: 50,
+    stroke: 'purple',
+    angle: 90,
+    dotArray: [[50, -50]]
+});
+var ellipse = new Ellipse({
+    left: 150,
+    top: 200,
+    angle: 45,
+    stroke: 'orange'
+});
+canvas.add(line, ellipse);
