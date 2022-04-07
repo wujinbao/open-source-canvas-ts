@@ -37,6 +37,8 @@ class Canvas {
 
 			this.drawTargetArray.push(item)
 		})
+
+		return this
 	}
 
 	remove(...drawTarget) {
@@ -49,6 +51,8 @@ class Canvas {
 			}
 		})
 		this.drawTargetArray = newDrawTargetArray
+
+		return this
 	}
 }
 
@@ -82,7 +86,8 @@ type DrawParam = {
 	scaleWidth?: number,
 	scaleHeight?: number,
 	globalAlpha?: number,
-	globalCompositeOperation?: GlobalCompositeOperation
+	globalCompositeOperation?: GlobalCompositeOperation,
+	selectable?: boolean
 }
 
 // 图形公共类
@@ -114,8 +119,10 @@ class DarwCommon {
 		scaleWidth: 1,
 		scaleHeight: 1,
 		globalAlpha: 1,
-		globalCompositeOperation: 'source-over'
+		globalCompositeOperation: 'source-over',
+		selectable: false
 	}
+	vertexArray: Array<[number, number]>
 
 	constructor(drawParam: DrawParam) {
 		if (drawParam) {
@@ -130,15 +137,17 @@ class DarwCommon {
 		return drawParam[attr]
 	}
 
-	set(attr: any, val?: any) {
+	set(attr: string | DrawParam, val?: any) {
 		let drawParam = this.drawParam
-		if (arguments.length === 2) {
+		if (typeof attr === 'string') {
 			drawParam[attr] = val
 		} else {
 			for (let key in attr) {
 				drawParam[key] = attr[key]
 			}
 		}
+
+		return this
 	}
 
 	draw(ctx: CanvasRenderingContext2D, drawTarget: any) {
@@ -171,13 +180,48 @@ class DarwCommon {
 			ctx.strokeStyle = this.drawParam.stroke
 			ctx.stroke()
 		}
+		ctx.closePath()
+
+		if (drawTarget.drawParam.selectable) {
+			this.vertexDraw(ctx, drawTarget)
+		}
+
 		ctx.restore()
+	}
+
+	vertexDraw(ctx: CanvasRenderingContext2D, drawTarget: any) {
+		let vertexArray = drawTarget.vertexArray
+		let drawParam = drawTarget.drawParam
+		ctx.translate(-drawParam.left, -drawParam.top)
+		ctx.lineCap = 'butt'
+		ctx.lineJoin = 'miter'
+		ctx.lineWidth = 1
+		ctx.miterLimit = 10
+		ctx.globalAlpha = 0.2
+		ctx.globalCompositeOperation = 'source-over'
+		ctx.strokeStyle = '#00a7d0'
+		ctx.fillStyle = '#00a7d0'
+		ctx.beginPath()
+		vertexArray.map((item, index) => {
+			if (index === 0) {
+				ctx.moveTo(item[0], item[1])
+			} else {
+				ctx.lineTo(item[0], item[1])
+			}
+		
+			ctx.fillRect(item[0] - 2.5, item[1] - 2.5, 5, 5)
+		})
+		ctx.fillRect(vertexArray[1][0] - 2.5, vertexArray[1][1] - 17.5, 5, 5)
+		ctx.closePath()
+		ctx.moveTo(vertexArray[1][0], vertexArray[1][1] - 2.5)
+		ctx.lineTo(vertexArray[1][0], vertexArray[1][1] - 12.5)
+		ctx.stroke()
+		ctx.closePath()
 	}
 }
 
 // 矩形类
 class Rect extends DarwCommon {
-	drawParam: DrawParam
 	constructor(drawParam?: DrawParam) {
 		super(drawParam)
 	}
@@ -190,12 +234,30 @@ class Rect extends DarwCommon {
 			drawParam.width, 
 			drawParam.height
 		)
+
+		this.vertex()
+	}
+
+	vertex() {
+		let left = this.drawParam.left
+		let top = this.drawParam.top
+		let width = this.drawParam.width
+		let height = this.drawParam.height
+		this.vertexArray = [
+			[left, top],
+			[left + width / 2, top],
+			[left + width, top],
+			[left + width, top + height / 2],
+			[left + width, top + height],
+			[left + width / 2, top + height],
+			[left, top + height],
+			[left, top + height / 2]
+		]
 	}
 }
 
 // 圆形类
 class Circle extends DarwCommon {
-	drawParam: DrawParam
 	constructor(drawParam?: DrawParam) {
 		super(drawParam)
 	}
@@ -210,11 +272,28 @@ class Circle extends DarwCommon {
 			drawParam.eAngle * Math.PI,
 			drawParam.counterclockwise
 		)
+
+		this.vertex()
+	}
+
+	vertex() {
+		let left = this.drawParam.left
+		let top = this.drawParam.top
+		let radius = this.drawParam.radius
+		this.vertexArray = [
+			[left - radius, top - radius],
+			[left, top - radius],
+			[left + radius, top - radius],
+			[left + radius, top],
+			[left + radius, top + radius],
+			[left, top + radius],
+			[left - radius, top + radius],
+			[left - radius, top]
+		]
 	}
 }
 
 class Triangle extends DarwCommon {
-	drawParam: DrawParam
 	constructor(drawParam?: DrawParam) {
 		super(drawParam)
 	}
@@ -225,11 +304,29 @@ class Triangle extends DarwCommon {
 		ctx.lineTo(drawParam.width / 2, drawParam.height)
 		ctx.lineTo(-drawParam.width / 2, drawParam.height)
 		ctx.closePath()
+
+		this.vertex()
+	}
+
+	vertex() {
+		let left = this.drawParam.left
+		let top = this.drawParam.top
+		let width = this.drawParam.width
+		let height = this.drawParam.height
+		this.vertexArray = [
+			[left - width / 2, top],
+			[left, top],
+			[left + width / 2, top],
+			[left + width / 2, top + height / 2],
+			[left + width / 2, top + height],
+			[left, top + height],
+			[left - width / 2, top + height],
+			[left - width / 2, top + height / 2]
+		]
 	}
 }
 
 class Line extends DarwCommon {
-	drawParam: DrawParam
 	constructor(drawParam?: DrawParam) {
 		super(drawParam)
 	}
@@ -244,7 +341,6 @@ class Line extends DarwCommon {
 }
 
 class Ellipse extends DarwCommon {
-	drawParam: DrawParam
 	constructor(drawParam?: DrawParam) {
 		super(drawParam)
 	}
@@ -253,16 +349,36 @@ class Ellipse extends DarwCommon {
 		let drawParam = this.drawParam
 		let rX = drawParam.rX
 		let rY = drawParam.rY
-		if (!ctx.ellipse) {
-			ctx.ellipse(0, 0, rX, rY, 0, 0, Math.PI*2)
+		let r = (rX > rY) ? rX : rY
+    	drawParam.scaleWidth = rX / r
+    	drawParam.scaleHeight = rY / r
+		if (ctx.ellipse) {
+			ctx.ellipse(0, 0, rX, rY, 0, drawParam.sAngle * Math.PI,
+			drawParam.eAngle * Math.PI,
+			drawParam.counterclockwise)
 		} else {
-			ctx.translate(-drawParam.left, -drawParam.top)
-			let r = (rX > rY) ? rX : rY
-    		drawParam.scaleWidth = rX / r
-    		drawParam.scaleHeight = rY / r
     		ctx.scale(drawParam.scaleWidth, drawParam.scaleHeight)
-    		ctx.arc(drawParam.left / drawParam.scaleWidth, drawParam.top / drawParam.scaleHeight, r, 0, 2 * Math.PI, false)
+    		ctx.arc(0, 0, r, 0, 2 * Math.PI, false)
 		}
+
+		this.vertex()
+	}
+
+	vertex() {
+		let left = this.drawParam.left
+		let top = this.drawParam.top
+		let rX = this.drawParam.rX
+		let rY = this.drawParam.rY
+		this.vertexArray = [
+			[left - rX, top - rY],
+			[left, top - rY],
+			[left + rX, top - rY],
+			[left + rX, top],
+			[left + rX, top + rY],
+			[left, top + rY],
+			[left - rX, top + rY],
+			[left - rX, top]
+		]
 	}
 }
 
@@ -276,7 +392,8 @@ let rect = new Rect({
 	top: 30,
 	fill: 'red',
 	shadowBlur: 20,
-	shadowOffsetX: -20
+	shadowOffsetX: -20,
+	selectable: true
 })
 
 let rect1 = new Rect({
@@ -293,7 +410,9 @@ let rect2 = new Rect({
 	height: 100,
 	stroke: 'yellow',
 	scaleWidth: 2,
-	scaleHeight: 2
+	scaleHeight: 2,
+	selectable: true,
+	lineWidth: 5
 })
 
 let circle = new Circle({
@@ -302,7 +421,8 @@ let circle = new Circle({
 	eAngle: 1.5,
 	fill: "green",
 	angle: 45,
-	globalAlpha: 0.5
+	globalAlpha: 0.5,
+	selectable: true
 })
 
 let triangle = new Triangle({
@@ -312,6 +432,7 @@ let triangle = new Triangle({
 	stroke: 'blue',
 	lineJoin: 'round',
 	lineWidth: 5,
+	selectable: true
 })
 
 canvas.add(rect, rect1, rect2, circle, triangle)
@@ -328,15 +449,17 @@ let line = new Line({
 	left: 150,
 	top: 50,
 	stroke: 'purple',
-	angle: 90,
-	dotArray: [[50, -50]]
+	dotArray: [[50, 50]]
 })
 
 let ellipse = new Ellipse({
 	left: 150,
 	top: 200,
+	stroke: 'orange',
 	angle: 45,
-	stroke: 'orange'
+	scaleWidth: 2,
+	scaleHeight: 2,
+	selectable: true
 })
 
-canvas.add(line, ellipse)
+canvas.add(line, ellipse, rect2)

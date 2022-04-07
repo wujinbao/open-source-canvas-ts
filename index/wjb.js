@@ -47,6 +47,7 @@ var Canvas = /** @class */ (function () {
             item.draw(_this.ctx, item);
             _this.drawTargetArray.push(item);
         });
+        return this;
     };
     Canvas.prototype.remove = function () {
         var _this = this;
@@ -63,6 +64,7 @@ var Canvas = /** @class */ (function () {
             }
         });
         this.drawTargetArray = newDrawTargetArray;
+        return this;
     };
     return Canvas;
 }());
@@ -96,7 +98,8 @@ var DarwCommon = /** @class */ (function () {
             scaleWidth: 1,
             scaleHeight: 1,
             globalAlpha: 1,
-            globalCompositeOperation: 'source-over'
+            globalCompositeOperation: 'source-over',
+            selectable: false
         };
         if (drawParam) {
             for (var key in drawParam) {
@@ -110,7 +113,7 @@ var DarwCommon = /** @class */ (function () {
     };
     DarwCommon.prototype.set = function (attr, val) {
         var drawParam = this.drawParam;
-        if (arguments.length === 2) {
+        if (typeof attr === 'string') {
             drawParam[attr] = val;
         }
         else {
@@ -118,6 +121,7 @@ var DarwCommon = /** @class */ (function () {
                 drawParam[key] = attr[key];
             }
         }
+        return this;
     };
     DarwCommon.prototype.draw = function (ctx, drawTarget) {
         ctx.save();
@@ -150,7 +154,40 @@ var DarwCommon = /** @class */ (function () {
             ctx.strokeStyle = this.drawParam.stroke;
             ctx.stroke();
         }
+        ctx.closePath();
+        if (drawTarget.drawParam.selectable) {
+            this.vertexDraw(ctx, drawTarget);
+        }
         ctx.restore();
+    };
+    DarwCommon.prototype.vertexDraw = function (ctx, drawTarget) {
+        var vertexArray = drawTarget.vertexArray;
+        var drawParam = drawTarget.drawParam;
+        ctx.translate(-drawParam.left, -drawParam.top);
+        ctx.lineCap = 'butt';
+        ctx.lineJoin = 'miter';
+        ctx.lineWidth = 1;
+        ctx.miterLimit = 10;
+        ctx.globalAlpha = 0.2;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = '#00a7d0';
+        ctx.fillStyle = '#00a7d0';
+        ctx.beginPath();
+        vertexArray.map(function (item, index) {
+            if (index === 0) {
+                ctx.moveTo(item[0], item[1]);
+            }
+            else {
+                ctx.lineTo(item[0], item[1]);
+            }
+            ctx.fillRect(item[0] - 2.5, item[1] - 2.5, 5, 5);
+        });
+        ctx.fillRect(vertexArray[1][0] - 2.5, vertexArray[1][1] - 17.5, 5, 5);
+        ctx.closePath();
+        ctx.moveTo(vertexArray[1][0], vertexArray[1][1] - 2.5);
+        ctx.lineTo(vertexArray[1][0], vertexArray[1][1] - 12.5);
+        ctx.stroke();
+        ctx.closePath();
     };
     return DarwCommon;
 }());
@@ -163,6 +200,23 @@ var Rect = /** @class */ (function (_super) {
     Rect.prototype.privateDraw = function (ctx) {
         var drawParam = this.drawParam;
         ctx.rect(0, 0, drawParam.width, drawParam.height);
+        this.vertex();
+    };
+    Rect.prototype.vertex = function () {
+        var left = this.drawParam.left;
+        var top = this.drawParam.top;
+        var width = this.drawParam.width;
+        var height = this.drawParam.height;
+        this.vertexArray = [
+            [left, top],
+            [left + width / 2, top],
+            [left + width, top],
+            [left + width, top + height / 2],
+            [left + width, top + height],
+            [left + width / 2, top + height],
+            [left, top + height],
+            [left, top + height / 2]
+        ];
     };
     return Rect;
 }(DarwCommon));
@@ -175,6 +229,22 @@ var Circle = /** @class */ (function (_super) {
     Circle.prototype.privateDraw = function (ctx) {
         var drawParam = this.drawParam;
         ctx.arc(0, 0, drawParam.radius, drawParam.sAngle * Math.PI, drawParam.eAngle * Math.PI, drawParam.counterclockwise);
+        this.vertex();
+    };
+    Circle.prototype.vertex = function () {
+        var left = this.drawParam.left;
+        var top = this.drawParam.top;
+        var radius = this.drawParam.radius;
+        this.vertexArray = [
+            [left - radius, top - radius],
+            [left, top - radius],
+            [left + radius, top - radius],
+            [left + radius, top],
+            [left + radius, top + radius],
+            [left, top + radius],
+            [left - radius, top + radius],
+            [left - radius, top]
+        ];
     };
     return Circle;
 }(DarwCommon));
@@ -189,6 +259,23 @@ var Triangle = /** @class */ (function (_super) {
         ctx.lineTo(drawParam.width / 2, drawParam.height);
         ctx.lineTo(-drawParam.width / 2, drawParam.height);
         ctx.closePath();
+        this.vertex();
+    };
+    Triangle.prototype.vertex = function () {
+        var left = this.drawParam.left;
+        var top = this.drawParam.top;
+        var width = this.drawParam.width;
+        var height = this.drawParam.height;
+        this.vertexArray = [
+            [left - width / 2, top],
+            [left, top],
+            [left + width / 2, top],
+            [left + width / 2, top + height / 2],
+            [left + width / 2, top + height],
+            [left, top + height],
+            [left - width / 2, top + height],
+            [left - width / 2, top + height / 2]
+        ];
     };
     return Triangle;
 }(DarwCommon));
@@ -215,17 +302,33 @@ var Ellipse = /** @class */ (function (_super) {
         var drawParam = this.drawParam;
         var rX = drawParam.rX;
         var rY = drawParam.rY;
-        if (!ctx.ellipse) {
-            ctx.ellipse(0, 0, rX, rY, 0, 0, Math.PI * 2);
+        var r = (rX > rY) ? rX : rY;
+        drawParam.scaleWidth = rX / r;
+        drawParam.scaleHeight = rY / r;
+        if (ctx.ellipse) {
+            ctx.ellipse(0, 0, rX, rY, 0, drawParam.sAngle * Math.PI, drawParam.eAngle * Math.PI, drawParam.counterclockwise);
         }
         else {
-            ctx.translate(-drawParam.left, -drawParam.top);
-            var r = (rX > rY) ? rX : rY;
-            drawParam.scaleWidth = rX / r;
-            drawParam.scaleHeight = rY / r;
             ctx.scale(drawParam.scaleWidth, drawParam.scaleHeight);
-            ctx.arc(drawParam.left / drawParam.scaleWidth, drawParam.top / drawParam.scaleHeight, r, 0, 2 * Math.PI, false);
+            ctx.arc(0, 0, r, 0, 2 * Math.PI, false);
         }
+        this.vertex();
+    };
+    Ellipse.prototype.vertex = function () {
+        var left = this.drawParam.left;
+        var top = this.drawParam.top;
+        var rX = this.drawParam.rX;
+        var rY = this.drawParam.rY;
+        this.vertexArray = [
+            [left - rX, top - rY],
+            [left, top - rY],
+            [left + rX, top - rY],
+            [left + rX, top],
+            [left + rX, top + rY],
+            [left, top + rY],
+            [left - rX, top + rY],
+            [left - rX, top]
+        ];
     };
     return Ellipse;
 }(DarwCommon));
@@ -236,7 +339,8 @@ var rect = new Rect({
     top: 30,
     fill: 'red',
     shadowBlur: 20,
-    shadowOffsetX: -20
+    shadowOffsetX: -20,
+    selectable: true
 });
 var rect1 = new Rect({
     left: 50,
@@ -251,7 +355,9 @@ var rect2 = new Rect({
     height: 100,
     stroke: 'yellow',
     scaleWidth: 2,
-    scaleHeight: 2
+    scaleHeight: 2,
+    selectable: true,
+    lineWidth: 5
 });
 var circle = new Circle({
     left: 200,
@@ -259,7 +365,8 @@ var circle = new Circle({
     eAngle: 1.5,
     fill: "green",
     angle: 45,
-    globalAlpha: 0.5
+    globalAlpha: 0.5,
+    selectable: true
 });
 var triangle = new Triangle({
     left: 50,
@@ -268,6 +375,7 @@ var triangle = new Triangle({
     stroke: 'blue',
     lineJoin: 'round',
     lineWidth: 5,
+    selectable: true
 });
 canvas.add(rect, rect1, rect2, circle, triangle);
 rect2.set('left', 200);
@@ -280,13 +388,15 @@ var line = new Line({
     left: 150,
     top: 50,
     stroke: 'purple',
-    angle: 90,
-    dotArray: [[50, -50]]
+    dotArray: [[50, 50]]
 });
 var ellipse = new Ellipse({
     left: 150,
     top: 200,
+    stroke: 'orange',
     angle: 45,
-    stroke: 'orange'
+    scaleWidth: 2,
+    scaleHeight: 2,
+    selectable: true
 });
-canvas.add(line, ellipse);
+canvas.add(line, ellipse, rect2);
