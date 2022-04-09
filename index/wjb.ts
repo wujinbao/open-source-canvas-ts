@@ -13,7 +13,7 @@ class Canvas {
 		width: 800,
 		height: 600
 	}
-	drawTargetArray: Array<any> = []
+	drawTargetArray: Array<any> = [] // todo 不定数的实例化对象是什么类型
 	constructor(id?: number | string, canvasParam?: CanvasParam) {
 		let body = document.body as HTMLCanvasElement
 		let canvas = document.createElement('canvas') as HTMLCanvasElement
@@ -31,28 +31,35 @@ class Canvas {
 		this.canvas = canvas
 	}
 
+	// todo ...drawTarget 不定数的实例化对象是什么类型
 	add(...drawTarget) {
 		drawTarget.map((item) => {
-			item.draw(this.ctx, item)
-
-			this.drawTargetArray.push(item)
+			if (this.drawTargetArray.indexOf(item) == -1) {
+				item.draw(this, item)
+				this.drawTargetArray.push(item)
+			}
 		})
 
 		return this
 	}
 
 	remove(...drawTarget) {
-		let newDrawTargetArray: Array<any> = []
 		this.ctx.clearRect(0, 0, this.canvasParam.width, this.canvasParam.height)
 		this.drawTargetArray.map((item, index) => {
 			if (drawTarget.indexOf(item) == -1) {
-				item.draw(this.ctx, item)
-				newDrawTargetArray.push(item)
+				item.draw(this, item)
+				this.drawTargetArray.push(item)
 			}
 		})
-		this.drawTargetArray = newDrawTargetArray
 
 		return this
+	}
+
+	renderAll() {
+		this.ctx.clearRect(0, 0, this.canvasParam.width, this.canvasParam.height)
+		this.drawTargetArray.map((item) => {
+			item.draw(this, item)
+		})
 	}
 }
 
@@ -90,6 +97,22 @@ type DrawParam = {
 	selectable?: boolean
 }
 
+enum Direction {
+	Left = 'left',
+	Right ='right',
+	Top = 'top',
+	Down = 'down'
+}
+
+type AnimateOption = {
+	vx?: number,
+	vy?: number,
+	sx?: number,
+	sy?: number,
+	kx?: number,
+	ky?: number
+}
+
 // 图形公共类
 // 问题：获取子类的属性与方法可以先获取到子类实例 this
 class DarwCommon {
@@ -123,7 +146,11 @@ class DarwCommon {
 		selectable: false
 	}
 	vertexArray: Array<[number, number]>
-
+	canvas: Canvas
+	requestID: number
+	animateOption: AnimateOption = {
+		vx: 1, vy: 1, sx: 1, sy: 1, kx: 1, ky: 1
+	}
 	constructor(drawParam: DrawParam) {
 		if (drawParam) {
 			for(let key in drawParam){
@@ -150,7 +177,9 @@ class DarwCommon {
 		return this
 	}
 
-	draw(ctx: CanvasRenderingContext2D, drawTarget: any) {
+	draw(canvas: Canvas, drawTarget: any) {
+		this.canvas = canvas
+		let ctx = canvas.ctx
 		ctx.save()
 		ctx.beginPath()
 		ctx.shadowColor = this.drawParam.shadowColor
@@ -217,6 +246,35 @@ class DarwCommon {
 		ctx.lineTo(vertexArray[1][0], vertexArray[1][1] - 12.5)
 		ctx.stroke()
 		ctx.closePath()
+	}
+	
+	animate(direction: string, distance: number | string, animateOption?: AnimateOption) {
+		this.requestID = requestAnimationFrame(this.animate.bind(this, direction, distance, animateOption))
+
+		if (animateOption) {
+			for(let key in animateOption){
+        		this.animateOption[key] = animateOption[key]
+  			}
+		}
+
+		if (typeof distance == 'number') {
+			if (direction == Direction.Left && this.drawParam.left >= distance) {
+				this.drawParam.left -= this.animateOption.vx * this.animateOption.sx
+			} else if (direction == Direction.Right && this.drawParam.left <= distance) {
+				this.drawParam.left += this.animateOption.vx * this.animateOption.sx
+			} else if (direction == Direction.Top && this.drawParam.top >= distance) {
+				this.drawParam.top -= this.animateOption.vy * this.animateOption.sy
+			} else if (direction == Direction.Down && this.drawParam.top <= distance) {
+				this.drawParam.top += this.animateOption.vy * this.animateOption.sy
+			} else {
+				cancelAnimationFrame(this.requestID)
+			}
+		} else if (typeof distance == 'string') {
+
+		}
+
+		this.canvas.ctx.clearRect(0, 0, this.canvas.canvasParam.width, this.canvas.canvasParam.height)
+		this.canvas.renderAll()		
 	}
 }
 
@@ -417,7 +475,7 @@ let rect2 = new Rect({
 
 let circle = new Circle({
 	left: 200,
-	top: 50,
+	top: 350,
 	eAngle: 1.5,
 	fill: "green",
 	angle: 45,
@@ -446,8 +504,8 @@ circle.set({
 canvas.remove(rect2)
 
 let line = new Line({
-	left: 150,
-	top: 50,
+	left: 50,
+	top: 250,
 	stroke: 'purple',
 	dotArray: [[50, 50]]
 })
@@ -463,3 +521,9 @@ let ellipse = new Ellipse({
 })
 
 canvas.add(line, ellipse, rect2)
+
+rect1.animate('right', 150, {
+	vx: 2
+})
+triangle.animate('down', 200)
+circle.animate('top', 50)

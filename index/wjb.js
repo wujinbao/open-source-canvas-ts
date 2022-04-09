@@ -20,7 +20,7 @@ var Canvas = /** @class */ (function () {
             width: 800,
             height: 600
         };
-        this.drawTargetArray = [];
+        this.drawTargetArray = []; // todo 不定数的实例化对象是什么类型
         var body = document.body;
         var canvas = document.createElement('canvas');
         body.appendChild(canvas);
@@ -37,6 +37,7 @@ var Canvas = /** @class */ (function () {
         this.ctx = canvas.getContext('2d');
         this.canvas = canvas;
     }
+    // todo ...drawTarget 不定数的实例化对象是什么类型
     Canvas.prototype.add = function () {
         var _this = this;
         var drawTarget = [];
@@ -44,8 +45,10 @@ var Canvas = /** @class */ (function () {
             drawTarget[_i] = arguments[_i];
         }
         drawTarget.map(function (item) {
-            item.draw(_this.ctx, item);
-            _this.drawTargetArray.push(item);
+            if (_this.drawTargetArray.indexOf(item) == -1) {
+                item.draw(_this, item);
+                _this.drawTargetArray.push(item);
+            }
         });
         return this;
     };
@@ -55,19 +58,31 @@ var Canvas = /** @class */ (function () {
         for (var _i = 0; _i < arguments.length; _i++) {
             drawTarget[_i] = arguments[_i];
         }
-        var newDrawTargetArray = [];
         this.ctx.clearRect(0, 0, this.canvasParam.width, this.canvasParam.height);
         this.drawTargetArray.map(function (item, index) {
             if (drawTarget.indexOf(item) == -1) {
-                item.draw(_this.ctx, item);
-                newDrawTargetArray.push(item);
+                item.draw(_this, item);
+                _this.drawTargetArray.push(item);
             }
         });
-        this.drawTargetArray = newDrawTargetArray;
         return this;
+    };
+    Canvas.prototype.renderAll = function () {
+        var _this = this;
+        this.ctx.clearRect(0, 0, this.canvasParam.width, this.canvasParam.height);
+        this.drawTargetArray.map(function (item) {
+            item.draw(_this, item);
+        });
     };
     return Canvas;
 }());
+var Direction;
+(function (Direction) {
+    Direction["Left"] = "left";
+    Direction["Right"] = "right";
+    Direction["Top"] = "top";
+    Direction["Down"] = "down";
+})(Direction || (Direction = {}));
 // 图形公共类
 // 问题：获取子类的属性与方法可以先获取到子类实例 this
 var DarwCommon = /** @class */ (function () {
@@ -101,6 +116,9 @@ var DarwCommon = /** @class */ (function () {
             globalCompositeOperation: 'source-over',
             selectable: false
         };
+        this.animateOption = {
+            vx: 1, vy: 1, sx: 1, sy: 1, kx: 1, ky: 1
+        };
         if (drawParam) {
             for (var key in drawParam) {
                 this.drawParam[key] = drawParam[key];
@@ -123,7 +141,9 @@ var DarwCommon = /** @class */ (function () {
         }
         return this;
     };
-    DarwCommon.prototype.draw = function (ctx, drawTarget) {
+    DarwCommon.prototype.draw = function (canvas, drawTarget) {
+        this.canvas = canvas;
+        var ctx = canvas.ctx;
         ctx.save();
         ctx.beginPath();
         ctx.shadowColor = this.drawParam.shadowColor;
@@ -188,6 +208,35 @@ var DarwCommon = /** @class */ (function () {
         ctx.lineTo(vertexArray[1][0], vertexArray[1][1] - 12.5);
         ctx.stroke();
         ctx.closePath();
+    };
+    DarwCommon.prototype.animate = function (direction, distance, animateOption) {
+        this.requestID = requestAnimationFrame(this.animate.bind(this, direction, distance, animateOption));
+        if (animateOption) {
+            for (var key in animateOption) {
+                this.animateOption[key] = animateOption[key];
+            }
+        }
+        if (typeof distance == 'number') {
+            if (direction == Direction.Left && this.drawParam.left >= distance) {
+                this.drawParam.left -= this.animateOption.vx * this.animateOption.sx;
+            }
+            else if (direction == Direction.Right && this.drawParam.left <= distance) {
+                this.drawParam.left += this.animateOption.vx * this.animateOption.sx;
+            }
+            else if (direction == Direction.Top && this.drawParam.top >= distance) {
+                this.drawParam.top -= this.animateOption.vy * this.animateOption.sy;
+            }
+            else if (direction == Direction.Down && this.drawParam.top <= distance) {
+                this.drawParam.top += this.animateOption.vy * this.animateOption.sy;
+            }
+            else {
+                cancelAnimationFrame(this.requestID);
+            }
+        }
+        else if (typeof distance == 'string') {
+        }
+        this.canvas.ctx.clearRect(0, 0, this.canvas.canvasParam.width, this.canvas.canvasParam.height);
+        this.canvas.renderAll();
     };
     return DarwCommon;
 }());
@@ -361,7 +410,7 @@ var rect2 = new Rect({
 });
 var circle = new Circle({
     left: 200,
-    top: 50,
+    top: 350,
     eAngle: 1.5,
     fill: "green",
     angle: 45,
@@ -385,8 +434,8 @@ circle.set({
 });
 canvas.remove(rect2);
 var line = new Line({
-    left: 150,
-    top: 50,
+    left: 50,
+    top: 250,
     stroke: 'purple',
     dotArray: [[50, 50]]
 });
@@ -400,3 +449,8 @@ var ellipse = new Ellipse({
     selectable: true
 });
 canvas.add(line, ellipse, rect2);
+rect1.animate('right', 150, {
+    vx: 2
+});
+triangle.animate('down', 200);
+circle.animate('top', 50);
