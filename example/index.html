@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>canvas</title>
+</head>
+
+<body>
+	
+</body>
+<script type="text/javascript" src="../metaCanvas/metaCanvas.js"></script>
+
+<script type="text/javascript">
+	// 代码运行测试
+	let canvas = new Canvas()
+
+	let rect = new Rect({
+		left: 30,
+		top: 30,
+		fill: 'red',
+		shadowBlur: 20,
+		shadowOffsetX: -20,
+		selectable: true
+	})
+
+	let rect1 = new Rect({
+		left: 50,
+		top: 50,
+		fill: 'yellow',
+		globalCompositeOperation: "destination-over"
+	})
+
+	let rect2 = new Rect({
+		left: 100,
+		top: 100,
+		width: 100,
+		height: 100,
+		stroke: 'yellow',
+		scaleWidth: 2,
+		scaleHeight: 2,
+		selectable: true,
+		lineWidth: 5
+	})
+
+	let circle = new Circle({
+		left: 200,
+		top: 350,
+		eAngle: 1.5,
+		fill: "green",
+		angle: 45,
+		globalAlpha: 0.5,
+		selectable: true
+	})
+
+	let triangle = new Triangle({
+		left: 50,
+		top: 120,
+		width: 80,
+		stroke: 'blue',
+		lineJoin: 'round',
+		lineWidth: 5,
+		selectable: true
+	})
+
+	canvas.add([rect, rect1, rect2, circle, triangle])
+
+	rect2.set({left: 200})
+	circle.set({
+		left: 250,
+		radius: 20
+	})
+
+	canvas.remove([rect2])
+
+	let line = new Line({
+		left: 50,
+		top: 250,
+		stroke: 'purple',
+		dotArray: [[50, 50]]
+	})
+
+	let ellipse = new Ellipse({
+		left: 150,
+		top: 200,
+		stroke: 'orange',
+		scaleWidth: 4,
+		scaleHeight: 4,
+		angle: 45,
+		selectable: true
+	})
+
+	canvas.add([line, ellipse, rect2])
+
+	rect1.animate('right', 150, {
+		vX: 2,
+		sX: 0.1
+	})
+	triangle.animate('down', 200, {
+		vY: 2
+	})
+	circle.animate('top', 50, {
+		vY: 1
+	})
+</script>
+</html>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>canvas</title>
+</head>
+
+<body>
+	
+</body>
+<script type="text/javascript" src="../metaCanvas/metaCanvas.js"></script>
+
+<script type="text/javascript">
+	let canvas = new Canvas()
+	let rect = new Rect({
+		left: 100,
+		top: 100,
+		width: 100,
+		height: 100,
+		stroke: 'yellow',
+		scaleWidth: 2,
+		scaleHeight: 2,
+		selectable: true,
+		lineWidth: 5
+	})
+	canvas.add([rect])
+</script>
+</html>

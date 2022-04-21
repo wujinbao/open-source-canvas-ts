@@ -15,15 +15,18 @@ var __extends = (this && this.__extends) || (function () {
 })();
 // 画布类
 var Canvas = /** @class */ (function () {
-    function Canvas(id, canvasParam) {
+    function Canvas(canvasParam, id) {
         this.canvasParam = {
             width: 800,
             height: 600
         };
-        this.drawTargetArray = []; // todo 不定数的实例化对象是什么类型
+        this.drawTargetArray = [];
+        this.interval = 1000 / 60;
         var body = document.body;
         var canvas = document.createElement('canvas');
         body.appendChild(canvas);
+        canvas.onmousedown = this.onmousedown.bind(this);
+        canvas.onmouseup = this.onmouseup.bind(this);
         if (canvasParam) {
             for (var key in canvasParam) {
                 canvas[key] = canvasParam[key];
@@ -37,14 +40,9 @@ var Canvas = /** @class */ (function () {
         this.ctx = canvas.getContext('2d');
         this.canvas = canvas;
     }
-    // todo ...drawTarget 不定数的实例化对象是什么类型
-    Canvas.prototype.add = function () {
+    Canvas.prototype.add = function (drawTargetArray) {
         var _this = this;
-        var drawTarget = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            drawTarget[_i] = arguments[_i];
-        }
-        drawTarget.map(function (item) {
+        drawTargetArray.map(function (item) {
             if (_this.drawTargetArray.indexOf(item) == -1) {
                 item.draw(_this, item);
                 _this.drawTargetArray.push(item);
@@ -52,19 +50,17 @@ var Canvas = /** @class */ (function () {
         });
         return this;
     };
-    Canvas.prototype.remove = function () {
+    Canvas.prototype.remove = function (drawTargetArray) {
         var _this = this;
-        var drawTarget = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            drawTarget[_i] = arguments[_i];
-        }
         this.ctx.clearRect(0, 0, this.canvasParam.width, this.canvasParam.height);
+        var newDrawTargetArray = [];
         this.drawTargetArray.map(function (item, index) {
-            if (drawTarget.indexOf(item) == -1) {
+            if (drawTargetArray.indexOf(item) == -1) {
                 item.draw(_this, item);
-                _this.drawTargetArray.push(item);
+                newDrawTargetArray.push(item);
             }
         });
+        this.drawTargetArray = newDrawTargetArray;
         return this;
     };
     Canvas.prototype.renderAll = function () {
@@ -73,6 +69,45 @@ var Canvas = /** @class */ (function () {
         this.drawTargetArray.map(function (item) {
             item.draw(_this, item);
         });
+    };
+    // todo e 是什么类型
+    Canvas.prototype.onmousedown = function (e) {
+        var _this = this;
+        var x = e.offsetX;
+        var y = e.offsetY;
+        this.drawTargetArray.map(function (drawTargetItem) {
+            var vertexWidth = drawTargetItem.vertexWidth;
+            var vertexHeight = drawTargetItem.vertexHeight;
+            var vertexArray = drawTargetItem.vertexArray;
+            vertexArray.map(function (item) {
+                if (x >= item[0] - vertexWidth && x <= item[0] + vertexWidth && y >= item[1] - vertexHeight && y <= item[1] + vertexHeight) {
+                    console.log(item);
+                }
+            });
+            if (x >= vertexArray[0][0] && x <= vertexArray[4][0] && y >= vertexArray[0][1] && y <= vertexArray[4][1]) {
+                _this.lastX = x;
+                _this.lastY = y;
+                _this.now = Date.now();
+                _this.canvas.onmousemove = _this.onmousemove.bind(_this, drawTargetItem);
+            }
+        });
+    };
+    Canvas.prototype.onmouseup = function () {
+        this.canvas.onmousemove = null;
+    };
+    Canvas.prototype.onmousemove = function (drawTargetItem, e) {
+        var currentX = e.offsetX;
+        var currentY = e.offsetY;
+        var currentTime = Date.now();
+        var currentInterval = currentTime - this.now;
+        if (currentInterval > this.interval) {
+            drawTargetItem.drawParam.left += currentX - this.lastX;
+            drawTargetItem.drawParam.top += currentY - this.lastY;
+            this.renderAll();
+            this.now = currentTime;
+            this.lastX = currentX;
+            this.lastY = currentY;
+        }
     };
     return Canvas;
 }());
@@ -85,8 +120,8 @@ var Direction;
 })(Direction || (Direction = {}));
 // 图形公共类
 // 问题：获取子类的属性与方法可以先获取到子类实例 this
-var DarwCommon = /** @class */ (function () {
-    function DarwCommon(drawParam) {
+var DrawCommon = /** @class */ (function () {
+    function DrawCommon(drawParam) {
         this.drawParam = {
             left: 0,
             top: 0,
@@ -116,8 +151,10 @@ var DarwCommon = /** @class */ (function () {
             globalCompositeOperation: 'source-over',
             selectable: false
         };
+        this.vertexWidth = 10;
+        this.vertexHeight = 10;
         this.animateOption = {
-            vx: 1, vy: 1, sx: 1, sy: 1, kx: 1, ky: 1
+            vX: 0, vY: 0, sX: 0, sY: 0
         };
         if (drawParam) {
             for (var key in drawParam) {
@@ -125,23 +162,16 @@ var DarwCommon = /** @class */ (function () {
             }
         }
     }
-    DarwCommon.prototype.get = function (attr) {
-        var drawParam = this.drawParam;
-        return drawParam[attr];
+    DrawCommon.prototype.get = function (attr) {
+        return this.drawParam[attr];
     };
-    DarwCommon.prototype.set = function (attr, val) {
-        var drawParam = this.drawParam;
-        if (typeof attr === 'string') {
-            drawParam[attr] = val;
-        }
-        else {
-            for (var key in attr) {
-                drawParam[key] = attr[key];
-            }
+    DrawCommon.prototype.set = function (attr) {
+        for (var key in attr) {
+            this.drawParam[key] = attr[key];
         }
         return this;
     };
-    DarwCommon.prototype.draw = function (canvas, drawTarget) {
+    DrawCommon.prototype.draw = function (canvas, drawTarget) {
         this.canvas = canvas;
         var ctx = canvas.ctx;
         ctx.save();
@@ -175,15 +205,26 @@ var DarwCommon = /** @class */ (function () {
             ctx.stroke();
         }
         ctx.closePath();
+        ctx.restore();
         if (drawTarget.drawParam.selectable) {
             this.vertexDraw(ctx, drawTarget);
         }
-        ctx.restore();
     };
-    DarwCommon.prototype.vertexDraw = function (ctx, drawTarget) {
+    // 父类需子类重写的方法
+    DrawCommon.prototype.privateDraw = function (ctx) { };
+    // 图形选择器 - 根据顶点绘制
+    DrawCommon.prototype.vertexDraw = function (ctx, drawTarget) {
         var vertexArray = drawTarget.vertexArray;
         var drawParam = drawTarget.drawParam;
-        ctx.translate(-drawParam.left, -drawParam.top);
+        var scaleWidth = drawParam.scaleWidth;
+        var scaleHeight = drawTarget.drawParam.scaleHeight;
+        var vertexWidth = drawTarget.vertexWidth * scaleWidth;
+        var vertexHeight = drawTarget.vertexHeight * scaleHeight;
+        ctx.save();
+        // 处理旋转问题
+        ctx.translate(drawTarget.drawParam.left, drawTarget.drawParam.top);
+        ctx.rotate(drawTarget.drawParam.angle * Math.PI / 180);
+        ctx.translate(-drawTarget.drawParam.left, -drawTarget.drawParam.top);
         ctx.lineCap = 'butt';
         ctx.lineJoin = 'miter';
         ctx.lineWidth = 1;
@@ -200,17 +241,22 @@ var DarwCommon = /** @class */ (function () {
             else {
                 ctx.lineTo(item[0], item[1]);
             }
-            ctx.fillRect(item[0] - 2.5, item[1] - 2.5, 5, 5);
+            ctx.fillRect(item[0] - vertexWidth / 2, item[1] - vertexHeight / 2, vertexWidth, vertexHeight);
         });
-        ctx.fillRect(vertexArray[1][0] - 2.5, vertexArray[1][1] - 17.5, 5, 5);
+        ctx.fillRect(vertexArray[1][0] - vertexWidth / 2, vertexArray[1][1] - vertexHeight * 3.5, vertexWidth, vertexHeight);
         ctx.closePath();
-        ctx.moveTo(vertexArray[1][0], vertexArray[1][1] - 2.5);
-        ctx.lineTo(vertexArray[1][0], vertexArray[1][1] - 12.5);
+        ctx.moveTo(vertexArray[1][0], vertexArray[1][1] - vertexHeight / 2);
+        ctx.lineTo(vertexArray[1][0], vertexArray[1][1] - vertexHeight * 2.5);
         ctx.stroke();
         ctx.closePath();
+        ctx.restore();
     };
-    DarwCommon.prototype.animate = function (direction, distance, animateOption) {
-        this.requestID = requestAnimationFrame(this.animate.bind(this, direction, distance, animateOption));
+    DrawCommon.prototype.animate = function (direction, distance, animateOption) {
+        // 判断图形是否已添加到画布上
+        if (this.canvas.drawTargetArray.indexOf(this) == -1) {
+            this.canvas.drawTargetArray.push(this);
+        }
+        this.requestID = requestAnimationFrame(this.animate.bind(this, direction, distance, this.animateOption));
         if (animateOption) {
             for (var key in animateOption) {
                 this.animateOption[key] = animateOption[key];
@@ -218,16 +264,20 @@ var DarwCommon = /** @class */ (function () {
         }
         if (typeof distance == 'number') {
             if (direction == Direction.Left && this.drawParam.left >= distance) {
-                this.drawParam.left -= this.animateOption.vx * this.animateOption.sx;
+                this.drawParam.left -= this.animateOption.vX;
+                this.drawParam.top += this.animateOption.vY;
             }
             else if (direction == Direction.Right && this.drawParam.left <= distance) {
-                this.drawParam.left += this.animateOption.vx * this.animateOption.sx;
+                this.drawParam.left += this.animateOption.vX;
+                this.drawParam.top += this.animateOption.vY;
             }
             else if (direction == Direction.Top && this.drawParam.top >= distance) {
-                this.drawParam.top -= this.animateOption.vy * this.animateOption.sy;
+                this.drawParam.left += this.animateOption.vX;
+                this.drawParam.top -= this.animateOption.vY;
             }
             else if (direction == Direction.Down && this.drawParam.top <= distance) {
-                this.drawParam.top += this.animateOption.vy * this.animateOption.sy;
+                this.drawParam.left += this.animateOption.vX;
+                this.drawParam.top += this.animateOption.vY;
             }
             else {
                 cancelAnimationFrame(this.requestID);
@@ -235,10 +285,12 @@ var DarwCommon = /** @class */ (function () {
         }
         else if (typeof distance == 'string') {
         }
+        this.animateOption.vX += this.animateOption.sX;
+        this.animateOption.vY += this.animateOption.sY;
         this.canvas.ctx.clearRect(0, 0, this.canvas.canvasParam.width, this.canvas.canvasParam.height);
         this.canvas.renderAll();
     };
-    return DarwCommon;
+    return DrawCommon;
 }());
 // 矩形类
 var Rect = /** @class */ (function (_super) {
@@ -254,8 +306,11 @@ var Rect = /** @class */ (function (_super) {
     Rect.prototype.vertex = function () {
         var left = this.drawParam.left;
         var top = this.drawParam.top;
-        var width = this.drawParam.width;
-        var height = this.drawParam.height;
+        // 保证放大、缩小后获取的顶点坐标正确值
+        var scaleWidth = this.drawParam.scaleWidth;
+        var scaleHeight = this.drawParam.scaleHeight;
+        var width = this.drawParam.width * scaleWidth;
+        var height = this.drawParam.height * scaleHeight;
         this.vertexArray = [
             [left, top],
             [left + width / 2, top],
@@ -268,7 +323,7 @@ var Rect = /** @class */ (function (_super) {
         ];
     };
     return Rect;
-}(DarwCommon));
+}(DrawCommon));
 // 圆形类
 var Circle = /** @class */ (function (_super) {
     __extends(Circle, _super);
@@ -283,20 +338,26 @@ var Circle = /** @class */ (function (_super) {
     Circle.prototype.vertex = function () {
         var left = this.drawParam.left;
         var top = this.drawParam.top;
+        // // 保证放大、缩小后获取的顶点坐标正确值
+        var scaleWidth = this.drawParam.scaleWidth;
+        var scaleHeight = this.drawParam.scaleHeight;
         var radius = this.drawParam.radius;
+        var radiusWidth = radius * scaleWidth;
+        var radiusHeight = radius * scaleHeight;
         this.vertexArray = [
-            [left - radius, top - radius],
-            [left, top - radius],
-            [left + radius, top - radius],
-            [left + radius, top],
-            [left + radius, top + radius],
-            [left, top + radius],
-            [left - radius, top + radius],
-            [left - radius, top]
+            [left - radiusWidth, top - radiusHeight],
+            [left, top - radiusHeight],
+            [left + radiusWidth, top - radiusHeight],
+            [left + radiusWidth, top],
+            [left + radiusWidth, top + radiusHeight],
+            [left, top + radiusHeight],
+            [left - radiusWidth, top + radiusHeight],
+            [left - radiusWidth, top]
         ];
     };
     return Circle;
-}(DarwCommon));
+}(DrawCommon));
+// 三角形类
 var Triangle = /** @class */ (function (_super) {
     __extends(Triangle, _super);
     function Triangle(drawParam) {
@@ -313,8 +374,11 @@ var Triangle = /** @class */ (function (_super) {
     Triangle.prototype.vertex = function () {
         var left = this.drawParam.left;
         var top = this.drawParam.top;
-        var width = this.drawParam.width;
-        var height = this.drawParam.height;
+        // 保证放大、缩小后获取的顶点坐标正确值
+        var scaleWidth = this.drawParam.scaleWidth;
+        var scaleHeight = this.drawParam.scaleHeight;
+        var width = this.drawParam.width * scaleWidth;
+        var height = this.drawParam.height * scaleHeight;
         this.vertexArray = [
             [left - width / 2, top],
             [left, top],
@@ -327,7 +391,8 @@ var Triangle = /** @class */ (function (_super) {
         ];
     };
     return Triangle;
-}(DarwCommon));
+}(DrawCommon));
+// 线类
 var Line = /** @class */ (function (_super) {
     __extends(Line, _super);
     function Line(drawParam) {
@@ -341,12 +406,14 @@ var Line = /** @class */ (function (_super) {
         });
     };
     return Line;
-}(DarwCommon));
+}(DrawCommon));
+// 椭圆类
 var Ellipse = /** @class */ (function (_super) {
     __extends(Ellipse, _super);
     function Ellipse(drawParam) {
         return _super.call(this, drawParam) || this;
     }
+    // todo 椭圆放大缩小问题未解决
     Ellipse.prototype.privateDraw = function (ctx) {
         var drawParam = this.drawParam;
         var rX = drawParam.rX;
@@ -355,6 +422,7 @@ var Ellipse = /** @class */ (function (_super) {
         drawParam.scaleWidth = rX / r;
         drawParam.scaleHeight = rY / r;
         if (ctx.ellipse) {
+            console.log(drawParam.scaleWidth);
             ctx.ellipse(0, 0, rX, rY, 0, drawParam.sAngle * Math.PI, drawParam.eAngle * Math.PI, drawParam.counterclockwise);
         }
         else {
@@ -366,8 +434,11 @@ var Ellipse = /** @class */ (function (_super) {
     Ellipse.prototype.vertex = function () {
         var left = this.drawParam.left;
         var top = this.drawParam.top;
-        var rX = this.drawParam.rX;
-        var rY = this.drawParam.rY;
+        // // 保证放大、缩小后获取的顶点坐标正确值
+        var scaleWidth = this.drawParam.scaleWidth;
+        var scaleHeight = this.drawParam.scaleHeight;
+        var rX = this.drawParam.rX * scaleWidth;
+        var rY = this.drawParam.rY * scaleHeight;
         this.vertexArray = [
             [left - rX, top - rY],
             [left, top - rY],
@@ -380,77 +451,4 @@ var Ellipse = /** @class */ (function (_super) {
         ];
     };
     return Ellipse;
-}(DarwCommon));
-// 代码运行测试
-var canvas = new Canvas();
-var rect = new Rect({
-    left: 30,
-    top: 30,
-    fill: 'red',
-    shadowBlur: 20,
-    shadowOffsetX: -20,
-    selectable: true
-});
-var rect1 = new Rect({
-    left: 50,
-    top: 50,
-    fill: 'yellow',
-    globalCompositeOperation: "destination-over"
-});
-var rect2 = new Rect({
-    left: 100,
-    top: 100,
-    width: 100,
-    height: 100,
-    stroke: 'yellow',
-    scaleWidth: 2,
-    scaleHeight: 2,
-    selectable: true,
-    lineWidth: 5
-});
-var circle = new Circle({
-    left: 200,
-    top: 350,
-    eAngle: 1.5,
-    fill: "green",
-    angle: 45,
-    globalAlpha: 0.5,
-    selectable: true
-});
-var triangle = new Triangle({
-    left: 50,
-    top: 120,
-    width: 80,
-    stroke: 'blue',
-    lineJoin: 'round',
-    lineWidth: 5,
-    selectable: true
-});
-canvas.add(rect, rect1, rect2, circle, triangle);
-rect2.set('left', 200);
-circle.set({
-    left: 250,
-    radius: 20
-});
-canvas.remove(rect2);
-var line = new Line({
-    left: 50,
-    top: 250,
-    stroke: 'purple',
-    dotArray: [[50, 50]]
-});
-var ellipse = new Ellipse({
-    left: 150,
-    top: 200,
-    stroke: 'orange',
-    angle: 45,
-    scaleWidth: 2,
-    scaleHeight: 2,
-    selectable: true
-});
-canvas.add(line, ellipse, rect2);
-rect1.animate('right', 150, {
-    vx: 2
-});
-triangle.animate('down', 200);
-circle.animate('top', 50);
+}(DrawCommon));
