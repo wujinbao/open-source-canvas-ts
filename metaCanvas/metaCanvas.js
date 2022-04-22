@@ -1,3 +1,7 @@
+/*
+* 遇坑总结
+* 1. 图形变化时得考虑到原先图形的放大、缩小系数
+ */
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||
@@ -21,7 +25,7 @@ var Canvas = /** @class */ (function () {
             height: 600
         };
         this.drawTargetArray = [];
-        this.interval = 1000 / 60;
+        this.delay = 1000 / 60;
         var body = document.body;
         var canvas = document.createElement('canvas');
         body.appendChild(canvas);
@@ -44,7 +48,7 @@ var Canvas = /** @class */ (function () {
         var _this = this;
         drawTargetArray.map(function (item) {
             if (_this.drawTargetArray.indexOf(item) == -1) {
-                item.draw(_this, item);
+                item.draw(_this);
                 _this.drawTargetArray.push(item);
             }
         });
@@ -56,7 +60,7 @@ var Canvas = /** @class */ (function () {
         var newDrawTargetArray = [];
         this.drawTargetArray.map(function (item, index) {
             if (drawTargetArray.indexOf(item) == -1) {
-                item.draw(_this, item);
+                item.draw(_this);
                 newDrawTargetArray.push(item);
             }
         });
@@ -67,47 +71,65 @@ var Canvas = /** @class */ (function () {
         var _this = this;
         this.ctx.clearRect(0, 0, this.canvasParam.width, this.canvasParam.height);
         this.drawTargetArray.map(function (item) {
-            item.draw(_this, item);
+            item.draw(_this);
         });
     };
     // todo e 是什么类型
     Canvas.prototype.onmousedown = function (e) {
         var _this = this;
-        var x = e.offsetX;
-        var y = e.offsetY;
+        this.lastX = e.offsetX;
+        this.lastY = e.offsetY;
         this.drawTargetArray.map(function (drawTargetItem) {
             var vertexWidth = drawTargetItem.vertexWidth;
             var vertexHeight = drawTargetItem.vertexHeight;
             var vertexArray = drawTargetItem.vertexArray;
-            vertexArray.map(function (item) {
-                if (x >= item[0] - vertexWidth && x <= item[0] + vertexWidth && y >= item[1] - vertexHeight && y <= item[1] + vertexHeight) {
-                    console.log(item);
+            // 需注意一下，map 遍历数组无法通过 return 退出循环
+            for (var i = 0; i < vertexArray.length; i++) {
+                if (_this.lastX >= vertexArray[i][0] - vertexWidth && _this.lastX <= vertexArray[i][0] + vertexWidth && _this.lastY >= vertexArray[i][1] - vertexHeight && _this.lastY <= vertexArray[i][1] + vertexHeight) {
+                    _this.canvas.onmousemove = _this.throttle(_this.onmousemove.bind(_this, drawTargetItem, i), _this.delay);
+                    return drawTargetItem;
                 }
-            });
-            if (x >= vertexArray[0][0] && x <= vertexArray[4][0] && y >= vertexArray[0][1] && y <= vertexArray[4][1]) {
-                _this.lastX = x;
-                _this.lastY = y;
-                _this.now = Date.now();
-                _this.canvas.onmousemove = _this.onmousemove.bind(_this, drawTargetItem);
+            }
+            if (_this.lastX >= vertexArray[0][0] && _this.lastX <= vertexArray[4][0] && _this.lastY >= vertexArray[0][1] && _this.lastY <= vertexArray[4][1]) {
+                _this.canvas.onmousemove = _this.throttle(_this.onmousemove.bind(_this, drawTargetItem, 9), _this.delay);
             }
         });
     };
     Canvas.prototype.onmouseup = function () {
         this.canvas.onmousemove = null;
     };
-    Canvas.prototype.onmousemove = function (drawTargetItem, e) {
+    Canvas.prototype.onmousemove = function (drawTargetItem, vertexIndex, e) {
         var currentX = e.offsetX;
         var currentY = e.offsetY;
-        var currentTime = Date.now();
-        var currentInterval = currentTime - this.now;
-        if (currentInterval > this.interval) {
-            drawTargetItem.drawParam.left += currentX - this.lastX;
-            drawTargetItem.drawParam.top += currentY - this.lastY;
-            this.renderAll();
-            this.now = currentTime;
-            this.lastX = currentX;
-            this.lastY = currentY;
+        var moveX = currentX - this.lastX;
+        var moveY = currentY - this.lastY;
+        if (vertexIndex == 9) {
+            drawTargetItem.drawParam.left += moveX;
+            drawTargetItem.drawParam.top += moveY;
         }
+        else {
+            drawTargetItem.onmousemove(vertexIndex, moveX, moveY);
+        }
+        this.renderAll();
+        this.lastX = currentX;
+        this.lastY = currentY;
+    };
+    // 节流，在一定时间内只执行一次
+    Canvas.prototype.throttle = function (fn, delay) {
+        var flag = true;
+        return function () {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            if (!flag)
+                return;
+            flag = false;
+            setTimeout(function () {
+                fn.apply(void 0, args);
+                flag = true;
+            }, delay);
+        };
     };
     return Canvas;
 }());
@@ -171,7 +193,7 @@ var DrawCommon = /** @class */ (function () {
         }
         return this;
     };
-    DrawCommon.prototype.draw = function (canvas, drawTarget) {
+    DrawCommon.prototype.draw = function (canvas) {
         this.canvas = canvas;
         var ctx = canvas.ctx;
         ctx.save();
@@ -189,7 +211,7 @@ var DrawCommon = /** @class */ (function () {
         ctx.translate(this.drawParam.left, this.drawParam.top);
         ctx.rotate(this.drawParam.angle * Math.PI / 180);
         ctx.scale(this.drawParam.scaleWidth, this.drawParam.scaleHeight);
-        drawTarget.privateDraw(ctx);
+        this.privateDraw(ctx);
         if (this.drawParam.fill && this.drawParam.stroke) {
             ctx.fillStyle = this.drawParam.fill;
             ctx.fill();
@@ -206,25 +228,26 @@ var DrawCommon = /** @class */ (function () {
         }
         ctx.closePath();
         ctx.restore();
-        if (drawTarget.drawParam.selectable) {
-            this.vertexDraw(ctx, drawTarget);
+        if (this.drawParam.selectable) {
+            this.vertexDraw(ctx);
         }
     };
     // 父类需子类重写的方法
     DrawCommon.prototype.privateDraw = function (ctx) { };
+    DrawCommon.prototype.onmousemove = function (vertexIndex, moveX, moveY) { };
     // 图形选择器 - 根据顶点绘制
-    DrawCommon.prototype.vertexDraw = function (ctx, drawTarget) {
-        var vertexArray = drawTarget.vertexArray;
-        var drawParam = drawTarget.drawParam;
+    DrawCommon.prototype.vertexDraw = function (ctx) {
+        var vertexArray = this.vertexArray;
+        var drawParam = this.drawParam;
         var scaleWidth = drawParam.scaleWidth;
-        var scaleHeight = drawTarget.drawParam.scaleHeight;
-        var vertexWidth = drawTarget.vertexWidth * scaleWidth;
-        var vertexHeight = drawTarget.vertexHeight * scaleHeight;
+        var scaleHeight = this.drawParam.scaleHeight;
+        var vertexWidth = this.vertexWidth * scaleWidth;
+        var vertexHeight = this.vertexHeight * scaleHeight;
         ctx.save();
         // 处理旋转问题
-        ctx.translate(drawTarget.drawParam.left, drawTarget.drawParam.top);
-        ctx.rotate(drawTarget.drawParam.angle * Math.PI / 180);
-        ctx.translate(-drawTarget.drawParam.left, -drawTarget.drawParam.top);
+        ctx.translate(this.drawParam.left, this.drawParam.top);
+        ctx.rotate(this.drawParam.angle * Math.PI / 180);
+        ctx.translate(-this.drawParam.left, -this.drawParam.top);
         ctx.lineCap = 'butt';
         ctx.lineJoin = 'miter';
         ctx.lineWidth = 1;
@@ -322,6 +345,46 @@ var Rect = /** @class */ (function (_super) {
             [left, top + height / 2]
         ];
     };
+    Rect.prototype.onmousemove = function (vertexIndex, moveX, moveY) {
+        var scaleWidth = this.drawParam.scaleWidth;
+        var scaleHeight = this.drawParam.scaleHeight;
+        switch (vertexIndex) {
+            case 0:
+                this.drawParam.left += moveX;
+                this.drawParam.top += moveY;
+                this.drawParam.width -= moveX / scaleWidth;
+                this.drawParam.height -= moveY / scaleHeight;
+                break;
+            case 1:
+                this.drawParam.top += moveY;
+                this.drawParam.height -= moveY / scaleHeight;
+                break;
+            case 2:
+                this.drawParam.top += moveY;
+                this.drawParam.width += moveX / scaleWidth;
+                this.drawParam.height -= moveY / scaleHeight;
+                break;
+            case 3:
+                this.drawParam.width += moveX / scaleWidth;
+                break;
+            case 4:
+                this.drawParam.width += moveX / scaleWidth;
+                this.drawParam.height += moveY / scaleHeight;
+                break;
+            case 5:
+                this.drawParam.height += moveY / scaleHeight;
+                break;
+            case 6:
+                this.drawParam.left += moveX;
+                this.drawParam.width -= moveX / scaleWidth;
+                this.drawParam.height += moveY / scaleHeight;
+                break;
+            case 7:
+                this.drawParam.left += moveX;
+                this.drawParam.width -= moveX / scaleWidth;
+                break;
+        }
+    };
     return Rect;
 }(DrawCommon));
 // 圆形类
@@ -354,6 +417,51 @@ var Circle = /** @class */ (function (_super) {
             [left - radiusWidth, top + radiusHeight],
             [left - radiusWidth, top]
         ];
+    };
+    Circle.prototype.onmousemove = function (vertexIndex, moveX, moveY) {
+        var radius = this.drawParam.radius;
+        switch (vertexIndex) {
+            case 0:
+                this.drawParam.left += moveX;
+                this.drawParam.top += moveY;
+                this.drawParam.scaleWidth -= moveX / radius;
+                this.drawParam.scaleHeight -= moveY / radius;
+                break;
+            case 1:
+                this.drawParam.top += moveY;
+                this.drawParam.scaleHeight -= moveY / radius;
+                break;
+            case 2:
+                this.drawParam.left += moveX;
+                this.drawParam.top += moveY;
+                this.drawParam.scaleWidth += moveX / radius;
+                this.drawParam.scaleHeight -= moveY / radius;
+                break;
+            case 3:
+                this.drawParam.left += moveX;
+                this.drawParam.scaleWidth += moveX / radius;
+                break;
+            case 4:
+                this.drawParam.left += moveX;
+                this.drawParam.top += moveY;
+                this.drawParam.scaleWidth += moveX / radius;
+                this.drawParam.scaleHeight += moveY / radius;
+                break;
+            case 5:
+                this.drawParam.top += moveY;
+                this.drawParam.scaleHeight += moveY / radius;
+                break;
+            case 6:
+                this.drawParam.left += moveX;
+                this.drawParam.top += moveY;
+                this.drawParam.scaleWidth -= moveX / radius;
+                this.drawParam.scaleHeight += moveY / radius;
+                break;
+            case 7:
+                this.drawParam.left += moveX;
+                this.drawParam.scaleWidth -= moveX / radius;
+                break;
+        }
     };
     return Circle;
 }(DrawCommon));
@@ -389,6 +497,49 @@ var Triangle = /** @class */ (function (_super) {
             [left - width / 2, top + height],
             [left - width / 2, top + height / 2]
         ];
+    };
+    Triangle.prototype.onmousemove = function (vertexIndex, moveX, moveY) {
+        var scaleWidth = this.drawParam.scaleWidth;
+        var scaleHeight = this.drawParam.scaleHeight;
+        switch (vertexIndex) {
+            case 0:
+                this.drawParam.left += moveX / 2;
+                this.drawParam.top += moveY;
+                this.drawParam.width -= moveX / scaleWidth;
+                this.drawParam.height -= moveY / scaleHeight;
+                break;
+            case 1:
+                this.drawParam.top += moveY;
+                this.drawParam.height -= moveY / scaleHeight;
+                break;
+            case 2:
+                this.drawParam.left += moveX / 2;
+                this.drawParam.top += moveY;
+                this.drawParam.width += moveX / scaleWidth;
+                this.drawParam.height -= moveY / scaleHeight;
+                break;
+            case 3:
+                this.drawParam.left += moveX / 2;
+                this.drawParam.width += moveX / scaleWidth;
+                break;
+            case 4:
+                this.drawParam.left += moveX / 2;
+                this.drawParam.width += moveX / scaleWidth;
+                this.drawParam.height += moveY / scaleHeight;
+                break;
+            case 5:
+                this.drawParam.height += moveY / scaleHeight;
+                break;
+            case 6:
+                this.drawParam.left += moveX / 2;
+                this.drawParam.width -= moveX / scaleWidth;
+                this.drawParam.height += moveY / scaleHeight;
+                break;
+            case 7:
+                this.drawParam.left += moveX / 2;
+                this.drawParam.width -= moveX / scaleWidth;
+                break;
+        }
     };
     return Triangle;
 }(DrawCommon));

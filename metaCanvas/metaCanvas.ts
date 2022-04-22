@@ -1,3 +1,8 @@
+/*
+* 遇坑总结
+* 1. 图形变化时得考虑到原先图形的放大、缩小系数
+ */
+
 // 画布配置选项类型描述
 type CanvasParam = {
 	width: number,
@@ -16,8 +21,7 @@ class Canvas {
 	drawTargetArray: Array<DrawCommon> = []
 	lastX: number
 	lastY: number
-	now: number
-	interval: number = 1000 / 60
+	delay: number = 1000 / 60
 	constructor(canvasParam?: CanvasParam, id?: number | string) {
 		let body = document.body as HTMLCanvasElement
 		let canvas = document.createElement('canvas') as HTMLCanvasElement
@@ -40,7 +44,7 @@ class Canvas {
 	add(drawTargetArray: Array<DrawCommon>) {
 		drawTargetArray.map((item) => {
 			if (this.drawTargetArray.indexOf(item) == -1) {
-				item.draw(this, item)
+				item.draw(this)
 				this.drawTargetArray.push(item)
 			}
 		})
@@ -54,7 +58,7 @@ class Canvas {
 		let newDrawTargetArray: Array<DrawCommon> = []
 		this.drawTargetArray.map((item, index) => {
 			if (drawTargetArray.indexOf(item) == -1) {
-				item.draw(this, item)
+				item.draw(this)
 				newDrawTargetArray.push(item)
 			}
 		})
@@ -67,29 +71,30 @@ class Canvas {
 	renderAll() {
 		this.ctx.clearRect(0, 0, this.canvasParam.width, this.canvasParam.height)
 		this.drawTargetArray.map((item) => {
-			item.draw(this, item)
+			item.draw(this)
 		})
 	}
 
 	// todo e 是什么类型
 	onmousedown(e) {
-		let x: number = e.offsetX
-		let y: number = e.offsetY
+		this.lastX = e.offsetX
+		this.lastY = e.offsetY
 		this.drawTargetArray.map((drawTargetItem) => {
 			let vertexWidth: number = drawTargetItem.vertexWidth
 			let vertexHeight: number = drawTargetItem.vertexHeight
 			let vertexArray = drawTargetItem.vertexArray
-			vertexArray.map((item) => {
-				if (x >= item[0] - vertexWidth && x <= item[0] + vertexWidth && y >= item[1] - vertexHeight && y <= item[1] + vertexHeight) {
-					console.log(item)
+			
+			// 需注意一下，map 遍历数组无法通过 return 退出循环
+			for (let i = 0; i < vertexArray.length; i++) {
+				if (this.lastX >= vertexArray[i][0] - vertexWidth && this.lastX <= vertexArray[i][0] + vertexWidth && this.lastY >= vertexArray[i][1] - vertexHeight && this.lastY <= vertexArray[i][1] + vertexHeight) {
+					this.canvas.onmousemove = this.throttle(this.onmousemove.bind(this, drawTargetItem, i), this.delay)
+					
+					return drawTargetItem
 				}
-			})
+			}
 
-			if (x >= vertexArray[0][0] && x <= vertexArray[4][0] && y >= vertexArray[0][1] && y <= vertexArray[4][1]) {
-				this.lastX = x
-				this.lastY = y
-				this.now = Date.now()
-				this.canvas.onmousemove = this.onmousemove.bind(this, drawTargetItem)
+			if (this.lastX >= vertexArray[0][0] && this.lastX <= vertexArray[4][0] && this.lastY >= vertexArray[0][1] && this.lastY <= vertexArray[4][1]) {
+				this.canvas.onmousemove = this.throttle(this.onmousemove.bind(this, drawTargetItem, 9), this.delay)
 			}
 		})
 	}
@@ -98,21 +103,36 @@ class Canvas {
 		this.canvas.onmousemove = null
 	}
 
-	onmousemove(drawTargetItem: DrawCommon, e) {
+	onmousemove(drawTargetItem: DrawCommon, vertexIndex: number, e) {
 		let currentX: number = e.offsetX
 		let currentY: number = e.offsetY
-		let currentTime: number = Date.now()
-		let currentInterval: number = currentTime - this.now
+		let moveX: number = currentX - this.lastX
+		let moveY: number = currentY - this.lastY
 
-		if (currentInterval > this.interval) {
-			drawTargetItem.drawParam.left += currentX - this.lastX
-			drawTargetItem.drawParam.top += currentY - this.lastY
-			this.renderAll()
-
-			this.now = currentTime
-			this.lastX = currentX
-			this.lastY = currentY
+		if (vertexIndex == 9) {
+			drawTargetItem.drawParam.left += moveX
+			drawTargetItem.drawParam.top += moveY
+		} else {
+			drawTargetItem.onmousemove(vertexIndex, moveX, moveY)
 		}
+
+		this.renderAll()
+
+		this.lastX = currentX
+		this.lastY = currentY
+	}
+
+	// 节流，在一定时间内只执行一次
+	throttle(fn, delay) {
+		let flag: boolean = true
+    	return function (...args) {
+        	if (!flag) return
+        	flag = false
+        	setTimeout(() => {
+            	fn(...args)
+            	flag = true
+        	}, delay)
+    	}
 	}
 }
 
@@ -229,7 +249,7 @@ class DrawCommon {
 		return this
 	}
 
-	draw(canvas: Canvas, drawTarget: DrawCommon) {
+	draw(canvas: Canvas) {
 		this.canvas = canvas
 		let ctx = canvas.ctx
 		ctx.save()
@@ -247,7 +267,7 @@ class DrawCommon {
 		ctx.translate(this.drawParam.left, this.drawParam.top)
 		ctx.rotate(this.drawParam.angle * Math.PI / 180)
 		ctx.scale(this.drawParam.scaleWidth, this.drawParam.scaleHeight)
-		drawTarget.privateDraw(ctx)
+		this.privateDraw(ctx)
 		if (this.drawParam.fill && this.drawParam.stroke) {
 			ctx.fillStyle = this.drawParam.fill
 			ctx.fill()
@@ -265,27 +285,28 @@ class DrawCommon {
 
 		ctx.restore()
 
-		if (drawTarget.drawParam.selectable) {
-			this.vertexDraw(ctx, drawTarget)
+		if (this.drawParam.selectable) {
+			this.vertexDraw(ctx)
 		}
 	}
 
 	// 父类需子类重写的方法
 	privateDraw(ctx: CanvasRenderingContext2D) {}
+	onmousemove(vertexIndex: number, moveX: number, moveY: number) {}
 
 	// 图形选择器 - 根据顶点绘制
-	vertexDraw(ctx: CanvasRenderingContext2D, drawTarget: DrawCommon) {
-		let vertexArray = drawTarget.vertexArray
-		let drawParam = drawTarget.drawParam
+	vertexDraw(ctx: CanvasRenderingContext2D) {
+		let vertexArray = this.vertexArray
+		let drawParam = this.drawParam
 		let scaleWidth: number = drawParam.scaleWidth
-		let scaleHeight: number = drawTarget.drawParam.scaleHeight
-		let vertexWidth: number = drawTarget.vertexWidth * scaleWidth
-		let vertexHeight: number = drawTarget.vertexHeight * scaleHeight
+		let scaleHeight: number = this.drawParam.scaleHeight
+		let vertexWidth: number = this.vertexWidth * scaleWidth
+		let vertexHeight: number = this.vertexHeight * scaleHeight
 		ctx.save()
 		// 处理旋转问题
-		ctx.translate(drawTarget.drawParam.left, drawTarget.drawParam.top)
-		ctx.rotate(drawTarget.drawParam.angle * Math.PI / 180)
-		ctx.translate(-drawTarget.drawParam.left, -drawTarget.drawParam.top)
+		ctx.translate(this.drawParam.left, this.drawParam.top)
+		ctx.rotate(this.drawParam.angle * Math.PI / 180)
+		ctx.translate(-this.drawParam.left, -this.drawParam.top)
 		ctx.lineCap = 'butt'
 		ctx.lineJoin = 'miter'
 		ctx.lineWidth = 1
@@ -394,6 +415,55 @@ class Rect extends DrawCommon {
 			[left, top + height / 2]
 		]
 	}
+
+	onmousemove(vertexIndex: number, moveX: number, moveY: number) {
+		let scaleWidth: number = this.drawParam.scaleWidth
+		let scaleHeight: number = this.drawParam.scaleHeight
+
+		switch (vertexIndex) {
+			case 0:
+				this.drawParam.left += moveX
+				this.drawParam.top += moveY
+				this.drawParam.width -= moveX / scaleWidth
+				this.drawParam.height -= moveY / scaleHeight
+				break
+
+			case 1:
+				this.drawParam.top += moveY
+				this.drawParam.height -= moveY / scaleHeight
+				break
+
+			case 2:
+				this.drawParam.top += moveY
+				this.drawParam.width += moveX / scaleWidth
+				this.drawParam.height -= moveY / scaleHeight
+				break
+
+			case 3:
+				this.drawParam.width += moveX / scaleWidth
+				break
+
+			case 4:
+				this.drawParam.width += moveX / scaleWidth
+				this.drawParam.height += moveY / scaleHeight
+				break
+
+			case 5:
+				this.drawParam.height += moveY / scaleHeight
+				break
+
+			case 6:
+				this.drawParam.left += moveX
+				this.drawParam.width -= moveX / scaleWidth
+				this.drawParam.height += moveY / scaleHeight
+				break
+
+			case 7:
+				this.drawParam.left += moveX
+				this.drawParam.width -= moveX / scaleWidth
+				break
+		}
+	}
 }
 
 // 圆形类
@@ -438,6 +508,60 @@ class Circle extends DrawCommon {
 			[left - radiusWidth, top]
 		]
 	}
+
+	onmousemove(vertexIndex: number, moveX: number, moveY: number) {
+		let radius: number = this.drawParam.radius
+
+		switch (vertexIndex) {
+			case 0:
+				this.drawParam.left += moveX
+				this.drawParam.top += moveY
+				this.drawParam.scaleWidth -= moveX / radius
+				this.drawParam.scaleHeight -= moveY / radius
+				break
+
+			case 1:
+				this.drawParam.top += moveY
+				this.drawParam.scaleHeight -= moveY / radius
+				break
+
+			case 2:
+				this.drawParam.left += moveX
+				this.drawParam.top += moveY
+				this.drawParam.scaleWidth += moveX / radius
+				this.drawParam.scaleHeight -= moveY / radius
+				break
+
+			case 3:
+				this.drawParam.left += moveX
+				this.drawParam.scaleWidth += moveX / radius
+				break
+
+			case 4:
+				this.drawParam.left += moveX
+				this.drawParam.top += moveY
+				this.drawParam.scaleWidth += moveX / radius
+				this.drawParam.scaleHeight += moveY / radius
+				break
+
+			case 5:
+				this.drawParam.top += moveY
+				this.drawParam.scaleHeight += moveY / radius
+				break
+
+			case 6:
+				this.drawParam.left += moveX
+				this.drawParam.top += moveY
+				this.drawParam.scaleWidth -= moveX / radius
+				this.drawParam.scaleHeight += moveY / radius
+				break
+
+			case 7:
+				this.drawParam.left += moveX
+				this.drawParam.scaleWidth -= moveX / radius
+				break
+		}
+	}
 }
 
 // 三角形类
@@ -476,6 +600,58 @@ class Triangle extends DrawCommon {
 			[left - width / 2, top + height],
 			[left - width / 2, top + height / 2]
 		]
+	}
+
+		onmousemove(vertexIndex: number, moveX: number, moveY: number) {
+		let scaleWidth: number = this.drawParam.scaleWidth
+		let scaleHeight: number = this.drawParam.scaleHeight
+
+		switch (vertexIndex) {
+			case 0:
+				this.drawParam.left += moveX / 2
+				this.drawParam.top += moveY
+				this.drawParam.width -= moveX / scaleWidth
+				this.drawParam.height -= moveY / scaleHeight
+				break
+
+			case 1:
+				this.drawParam.top += moveY
+				this.drawParam.height -= moveY / scaleHeight
+				break
+
+			case 2:
+				this.drawParam.left += moveX / 2
+				this.drawParam.top += moveY
+				this.drawParam.width += moveX / scaleWidth
+				this.drawParam.height -= moveY / scaleHeight
+				break
+
+			case 3:
+				this.drawParam.left += moveX / 2
+				this.drawParam.width += moveX / scaleWidth
+				break
+
+			case 4:
+				this.drawParam.left += moveX / 2
+				this.drawParam.width += moveX / scaleWidth
+				this.drawParam.height += moveY / scaleHeight
+				break
+
+			case 5:
+				this.drawParam.height += moveY / scaleHeight
+				break
+
+			case 6:
+				this.drawParam.left += moveX / 2
+				this.drawParam.width -= moveX / scaleWidth
+				this.drawParam.height += moveY / scaleHeight
+				break
+
+			case 7:
+				this.drawParam.left += moveX / 2
+				this.drawParam.width -= moveX / scaleWidth
+				break
+		}
 	}
 }
 
